@@ -10,6 +10,12 @@ JOBS="$(sysctl -n hw.ncpu)"
 export CMAKE_BUILD_PARALLEL_LEVEL="$JOBS" MAKEFLAGS="-j$JOBS"
 TCN=llvm-mingw-20260421-ucrt-macos-universal
 TC="$R/toolchains/$TCN/bin"
+# FEX prefers system packages over its bundled External/ copies; Homebrew's are macOS builds,
+# and the app links the bundled archives (FEX/build-ios/External/*), so never look outside.
+FEX_NO_SYSTEM_PKGS="-DCMAKE_DISABLE_FIND_PACKAGE_fmt=ON -DCMAKE_DISABLE_FIND_PACKAGE_xxhash=ON \
+ -DCMAKE_DISABLE_FIND_PACKAGE_Zydis=ON -DCMAKE_DISABLE_FIND_PACKAGE_Zycore=ON \
+ -DCMAKE_DISABLE_FIND_PACKAGE_unordered_dense=ON -DCMAKE_DISABLE_FIND_PACKAGE_range-v3=ON \
+ -DCMAKE_DISABLE_FIND_PACKAGE_Catch2=ON"
 LLVM_COMMIT=8dfdcc7b7
 mkdir -p .build-stamps build-logs toolchains
 # Rust: rustup from rustup.rs (~/.cargo/bin) or Homebrew (keg-only)
@@ -118,11 +124,14 @@ fex_ios() {  # build/fex-ios/build.sh options + CMAKE_SYSTEM_PROCESSOR (empty fo
     -DCMAKE_OSX_ARCHITECTURES=arm64 -DCMAKE_OSX_SYSROOT=iphoneos -DCMAKE_OSX_DEPLOYMENT_TARGET=17.0 \
     -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTING=OFF -DBUILD_THUNKS=OFF -DBUILD_FEXCONFIG=OFF \
     -DBUILD_FEX_LINUX_TESTS=OFF -DENABLE_FEX_ALLOCATOR=OFF -DENABLE_ASSERTIONS=OFF \
-    -DENABLE_CLANG_THUNKS=ON -DENABLE_CCACHE=ON -DTUNE_CPU=none
+    -DENABLE_CLANG_THUNKS=ON -DENABLE_CCACHE=ON -DTUNE_CPU=none $FEX_NO_SYSTEM_PKGS
   # No FEX_IOS_HOST here: in FEX that means "Windows module on an iOS host" (VirtualQuery etc.);
   # the native iOS FEXCore is the __APPLE__ path.
   build/fex-ios/build.sh
   ls FEX/build-ios/FEXCore/Source/*.a
+  cmake --build FEX/build-ios --target fmt cephes_128bit softfloat_3e xxhash JemallocLibs
+  ls FEX/build-ios/FEXCore/Source/libJemallocLibs.a FEX/build-ios/External/fmt/libfmt.a FEX/build-ios/External/cephes/libcephes_128bit.a \
+     FEX/build-ios/External/SoftFloat-3e/libsoftfloat_3e.a FEX/build-ios/External/xxhash/cmake_unofficial/libxxhash.a
 }
 
 fex_arm64ec() {  # build/fex-arm64ec/build.sh options + MINGW_TRIPLE + the iOS-host link rules (FEX_IOS_HOST_BUILD)
@@ -131,7 +140,7 @@ fex_arm64ec() {  # build/fex-arm64ec/build.sh options + MINGW_TRIPLE + the iOS-h
   cmake -S FEX -B FEX/build-arm64ec -DCMAKE_BUILD_TYPE=Release \
     -DCMAKE_TOOLCHAIN_FILE="$R/FEX/Data/CMake/toolchain_mingw.cmake" -DMINGW_TRIPLE=arm64ec-w64-mingw32 \
     -DENABLE_FEX_ALLOCATOR=ON -DENABLE_JEMALLOC_GLIBC_ALLOC=ON -DENABLE_OFFLINE_RUNTIME=ON \
-    -DBUILD_FEXCONFIG=ON -DENABLE_CLANG_THUNKS=ON -DENABLE_CCACHE=ON -DTUNE_CPU=none \
+    -DBUILD_FEXCONFIG=ON -DENABLE_CLANG_THUNKS=ON -DENABLE_CCACHE=ON -DTUNE_CPU=none $FEX_NO_SYSTEM_PKGS \
     -DBUILD_TESTING=OFF -DBUILD_THUNKS=OFF -DENABLE_ASSERTIONS=OFF \
     -DFEX_IOS_HOST_BUILD=ON -DCMAKE_C_FLAGS=-DFEX_IOS_HOST -DCMAKE_CXX_FLAGS=-DFEX_IOS_HOST \
     -DCMAKE_ASM_FLAGS=-DFEX_IOS_HOST
