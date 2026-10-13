@@ -1,0 +1,101 @@
+name: Build Madeira IPA
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: build-ipa-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: macos-26
+    timeout-minutes: 360
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Toolchain info
+        run: |
+          xcodebuild -version
+          xcrun --sdk iphoneos --show-sdk-version
+          sysctl -n machdep.cpu.brand_string hw.ncpu
+          df -h .
+
+      - name: Restore LLVM toolchains
+        id: llvm-cache
+        uses: actions/cache/restore@v4
+        with:
+          key: toolchains-llvm-8dfdcc7b7-mingw-20260421-v1
+          path: |
+            toolchains/llvm-mingw-20260421-ucrt-macos-universal
+            toolchains/llvm-project/llvm/include
+            toolchains/llvm-project/llvm/cmake
+            toolchains/llvm-host-build/bin
+            toolchains/llvm-ios-build/include
+            toolchains/llvm-ios-build/lib/*.a
+            .build-stamps/01-llvm-mingw
+            .build-stamps/02-llvm-src
+            .build-stamps/03-llvm-host
+            .build-stamps/04-llvm-ios
+
+      - name: Restore ccache
+        uses: actions/cache/restore@v4
+        with:
+          key: ccache-${{ github.run_id }}
+          restore-keys: ccache-
+          path: ~/Library/Caches/ccache
+
+      - name: Microsoft Visual C++ runtime (downloaded from Microsoft, not committed)
+        run: |
+          brew install sevenzip
+          ci/fetch-vcruntime.sh
+
+      - name: Build
+        run: ci/build-all.sh
+
+      - name: Save LLVM toolchains
+        if: always() && steps.llvm-cache.outputs.cache-hit != 'true' && hashFiles('.build-stamps/04-llvm-ios') != ''
+        uses: actions/cache/save@v4
+        with:
+          key: toolchains-llvm-8dfdcc7b7-mingw-20260421-v1
+          path: |
+            toolchains/llvm-mingw-20260421-ucrt-macos-universal
+            toolchains/llvm-project/llvm/include
+            toolchains/llvm-project/llvm/cmake
+            toolchains/llvm-host-build/bin
+            toolchains/llvm-ios-build/include
+            toolchains/llvm-ios-build/lib/*.a
+            .build-stamps/01-llvm-mingw
+            .build-stamps/02-llvm-src
+            .build-stamps/03-llvm-host
+            .build-stamps/04-llvm-ios
+
+      - name: Save ccache
+        if: always()
+        uses: actions/cache/save@v4
+        with:
+          key: ccache-${{ github.run_id }}
+          path: ~/Library/Caches/ccache
+
+      - name: Upload build logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-logs
+          path: build-logs/
+          retention-days: 14
+
+      - name: Upload IPA
+        uses: actions/upload-artifact@v4
+        with:
+          name: Madeira-unsigned-ipa
+          path: build-out/Madeira-unsigned.ipa
+          retention-days: 14
+          if-no-files-found: error
