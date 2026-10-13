@@ -112,14 +112,15 @@ wine_macos() {  # host tree whose config.h / generated headers / tools the unix-
   make -j"$JOBS" __tooldeps__ include/all
 }
 
-fex_ios() {  # build/fex-ios/build.sh options + CMAKE_SYSTEM_PROCESSOR (empty for iOS) + FEX_IOS_HOST
+fex_ios() {  # build/fex-ios/build.sh options + CMAKE_SYSTEM_PROCESSOR (empty for iOS)
   rm -rf FEX/build-ios   # CMakeSystem.cmake from a failed configure pins an empty processor
   cmake -S FEX -B FEX/build-ios -DCMAKE_SYSTEM_NAME=iOS -DCMAKE_SYSTEM_PROCESSOR=arm64 \
     -DCMAKE_OSX_ARCHITECTURES=arm64 -DCMAKE_OSX_SYSROOT=iphoneos -DCMAKE_OSX_DEPLOYMENT_TARGET=17.0 \
     -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTING=OFF -DBUILD_THUNKS=OFF -DBUILD_FEXCONFIG=OFF \
     -DBUILD_FEX_LINUX_TESTS=OFF -DENABLE_FEX_ALLOCATOR=OFF -DENABLE_ASSERTIONS=OFF \
-    -DENABLE_CLANG_THUNKS=ON -DENABLE_CCACHE=ON -DTUNE_CPU=none \
-    -DCMAKE_C_FLAGS=-DFEX_IOS_HOST -DCMAKE_CXX_FLAGS=-DFEX_IOS_HOST -DCMAKE_ASM_FLAGS=-DFEX_IOS_HOST
+    -DENABLE_CLANG_THUNKS=ON -DENABLE_CCACHE=ON -DTUNE_CPU=none
+  # No FEX_IOS_HOST here: in FEX that means "Windows module on an iOS host" (VirtualQuery etc.);
+  # the native iOS FEXCore is the __APPLE__ path.
   build/fex-ios/build.sh
   ls FEX/build-ios/FEXCore/Source/*.a
 }
