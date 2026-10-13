@@ -143,7 +143,9 @@ fex_arm64ec() {  # build/fex-arm64ec/build.sh options + MINGW_TRIPLE + the iOS-h
     -DBUILD_FEXCONFIG=ON -DENABLE_CLANG_THUNKS=ON -DENABLE_CCACHE=ON -DTUNE_CPU=none $FEX_NO_SYSTEM_PKGS \
     -DBUILD_TESTING=OFF -DBUILD_THUNKS=OFF -DENABLE_ASSERTIONS=OFF \
     -DFEX_IOS_HOST_BUILD=ON -DCMAKE_C_FLAGS=-DFEX_IOS_HOST -DCMAKE_CXX_FLAGS=-DFEX_IOS_HOST \
-    -DCMAKE_ASM_FLAGS=-DFEX_IOS_HOST
+    -DCMAKE_ASM_FLAGS=-DFEX_IOS_HOST -DENABLE_LTO=OFF -DCMAKE_POLICY_VERSION_MINIMUM=3.5
+  # ENABLE_LTO=OFF as build/fex-wow64/build.sh does: with LTO the EC objects reach lld as
+  # bitcode and libc++'s EC symbols go unresolved.
   build/fex-arm64ec/build.sh
 }
 
