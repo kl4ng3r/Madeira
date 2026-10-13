@@ -26,7 +26,7 @@ step() {  # step <name> <command...>
   local n="$1"; shift
   if [ -f ".build-stamps/$n" ]; then echo "[skip] $n"; return; fi
   echo "[run ] $n  ($(date '+%H:%M:%S'))  log: build-logs/$n.log"
-  echo "RUNNING $n $(date '+%F %T')" > "$STATUS"
+  echo "RUNNING $n $(date '+%F %T')" > "$STATUS"; touch .build-stamps/.step-start
   # Not inside `if`: bash ignores set -e in a tested command, which hid failures in steps.
   set +e; ( set -e; cd "$R"; "$@" ) > "build-logs/$n.log" 2>&1; local rc=$?; set -e
   if [ $rc -eq 0 ]; then
@@ -35,7 +35,11 @@ step() {  # step <name> <command...>
     echo "FAILED $n $(date '+%F %T')" > "$STATUS"
     echo "[FAIL] $n -- first errors in build-logs/$n.log:"
     grep -nE 'error:|Error [0-9]|FAILED|fatal' "build-logs/$n.log" | head -25 || true
-    echo "--- last lines:"; tail -40 "build-logs/$n.log"; exit 1
+    echo "--- last lines:"; tail -40 "build-logs/$n.log"
+    # Per-file compiler errors the repo's scripts write next to their objects:
+    find build -path '*/obj/*.err' -size +0 -newer ".build-stamps/.step-start" 2>/dev/null | while read -r e; do
+      echo "--- $e"; head -40 "$e"; done
+    exit 1
   fi
 }
 
@@ -118,6 +122,12 @@ wine_macos() {  # host tree whose config.h / generated headers / tools the unix-
   make -j"$JOBS" __tooldeps__ include/all
 }
 
+freetype() {  # build/freetype-ios/build.sh expects this clone (its header); dwrite + win32u need it
+  [ -d research/freetype/.git ] || git clone --depth 1 --branch VER-2-13-3 \
+    https://github.com/freetype/freetype.git research/freetype
+  build/freetype-ios/build.sh
+}
+
 fex_ios() {  # build/fex-ios/build.sh options + CMAKE_SYSTEM_PROCESSOR (empty for iOS)
   rm -rf FEX/build-ios   # CMakeSystem.cmake from a failed configure pins an empty processor
   cmake -S FEX -B FEX/build-ios -DCMAKE_SYSTEM_NAME=iOS -DCMAKE_SYSTEM_PROCESSOR=arm64 \
@@ -191,6 +201,7 @@ step 08-fex-arm64ec    fex_arm64ec
 step 09-wine-arm64ec   wine_arm64ec
 step 10-wine-modules   bash -c 'export PATH="$(brew --prefix bison)/bin:$PATH"; build/wine-pe/build-modules.sh'
 step 11-wine-macos     wine_macos
+step 11b-freetype     freetype
 step 12-ntdll-unix     build/ntdll-unix/build.sh
 step 13-wineserver     build/wineserver/build.sh
 step 14-win32u-unix    build/win32u-unix/build.sh
